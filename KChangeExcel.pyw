@@ -7,7 +7,7 @@
 #-------------------------------------------------------------------------------
 
 title = "KChangeExcel"
-ver = "v0.1.0.0"
+ver = "v0.1.1.0"
 url = "https://github.com/dimak222/KChangeExcel" # ссылка на файл
 
 def DoubleExe():# проверка на уже запущеное приложение
@@ -43,15 +43,20 @@ def DoubleExe():# проверка на уже запущеное приложе
 
 def Check_update(): # проверить обновление приложение
 
-    import sys # модуль информации об операционной системе
+    try: # попытаться импортировать модуль обновления
 
-    sys.path.insert(0, "../Updater") # путь откуда брать модуль
+        import sys # модуль информации об операционной системе
 
-    from Updater import Update # импортируем модуль обновления
+        sys.path.insert(0, "../Updater") # путь откуда брать модуль
 
-    Update(title, ver, beta, url) # проверяем обновление (имя программы, версия программы, скачивать бета версию, ссылка на программу)
+        from Updater import Update # импортируем модуль обновления
 
-def KompasAPI(): # подключение API компаса
+        Update(title, ver, beta, url) # проверяем обновление (имя программы, версия программы, скачивать бета версию, ссылка на программу)
+
+    except: # не удалось
+        pass # пропустить
+
+def KompasAPI(): # подключение API КОМПАСа
 
     import pythoncom # модуль для запуска без IDE
     from win32com.client import Dispatch, gencache # библиотека API Windows
@@ -135,55 +140,61 @@ def Message(text = "Ошибка!", counter = 4): # сообщение, пове
 
     msg_th.join() # ждать завершения процесса, иначе может закрыться следующие окно
 
+def ExcelAPI(): # подключение API EXcel
+
+    from openpyxl import load_workbook # модуль управлением Excel
+
+    workbook = load_workbook(program_directory + title + ".xlsx") # подключимся к Excel
+    ws_name = "v1.0" # название листа
+    ws = workbook[ws_name] # выберем лист
+
+    for row in ws.iter_rows(min_col = 2, min_row = 2, max_col = 10, max_row = ws.max_row, values_only = True): # построчно обойдём все колонки Excel
+        print(row)
+
+def Change_property(): # изменение св-в документов
+
+    iPropertyMng = KompasAPI7.IPropertyMng(iApplication) # интерфейс Менеджера свойств
+
+    iProperty = iPropertyMng.GetProperty(iKompasDocument, "Раздел спецификации") # интерфейс свойства
+
+    iIsComplexPropertyValue = iPropertyKeeper.IsComplexPropertyValue(iProperty) # признак комплексного значения свойства - True - составное свойство, False - нет
+
+    iPropertyValue = iPropertyKeeper.GetPropertyValue(iProperty, 0, True)[1] # получить значение свойства (интерфейс св-ва, значение св-ва, единици измерения (СИ))
+
+    dict_xml = {"Детали": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">' # словарь, где значение до ":" это ключ, после значение.
+                              '<property id="sectionName" value="Детали" type="string" />'
+                              '<property id="sectionNumb" value="20" type="int" />',
+                "Стандартные изделия": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
+                                          '<property id="sectionName" value="Стандартные изделия" type="string" />'
+                                          '<property id="sectionNumb" value="25" type="int" />',
+                "Прочие изделия": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
+                                      '<property id="sectionName" value="Прочие изделия" type="string" />'
+                                      '<property id="sectionNumb" value="30" type="int" />',
+                "Материалы": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
+                                  '<property id="sectionName" value="Материалы" type="string" />'
+                                  '<property id="sectionNumb" value="35" type="int" />',
+                "Комплекты": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
+                                  '<property id="sectionName" value="Комплекты" type="string" />'
+                                  '<property id="sectionNumb" value="40" type="int" />',
+                }
+
+    iSetComplexPropertyValue = iPropertyKeeper.SetComplexPropertyValue(iProperty, dict_xml["Детали"]) # установить значение свойства (интерфейс св-ва, значение св-ва, единици измерения (СИ))
+
+    iProperty = iPropertyMng.GetProperty(iKompasDocument, "Плотность") # интерфейс свойства
+    ##iProperty = iPropertyMng.GetProperty(iKompasDocument, "Материал") # интерфейс свойства
+
+    iPropertyValue = iPropertyKeeper.GetPropertyValue(iProperty, 0, True)[1] # получить значение свойства (интерфейс св-ва, значение св-ва, единици измерения (СИ))
+    iSetPropertyValue = iPropertyKeeper.SetPropertyValue(iProperty, "2770", True) # получить значение свойства (интерфейс св-ва, значение св-ва, единици измерения (СИ))
+    ##iSetPropertyValue = iPropertyKeeper.SetPropertyValue(iProperty, "Сталь 40Х ГОСТ 4543-2016", True) # получить значение свойства (интерфейс св-ва, значение св-ва, единици измерения (СИ))
+
+    iProperty.Update() # применим сво-ва
+
 #-------------------------------------------------------------------------------
 
-DoubleExe()# проверка на уже запущеное приложени
+DoubleExe() # проверка на уже запущеное приложени
 
 Check_update() # проверить обновление приложение
 
 KompasAPI() # подключение API компаса
 
-
-from openpyxl import load_workbook
-workbook = load_workbook(program_directory + title + ".xlsx")
-ws_name = "v1.0"
-ws = workbook[ws_name]
-
-for row in ws.iter_rows(min_col = 2, min_row = 2, max_col = 10, max_row = ws.max_row, values_only = True):
-    print(row)
-
-iPropertyMng = KompasAPI7.IPropertyMng(iApplication) # интерфейс Менеджера свойств
-
-iProperty = iPropertyMng.GetProperty(iKompasDocument, "Раздел спецификации") # интерфейс свойства
-
-iIsComplexPropertyValue = iPropertyKeeper.IsComplexPropertyValue(iProperty) # признак комплексного значения свойства - True - составное свойство, False - нет
-
-iPropertyValue = iPropertyKeeper.GetPropertyValue(iProperty, 0, True)[1] # получить значение свойства (интерфейс св-ва, значение св-ва, единици измерения (СИ))
-
-dict_xml = {"Детали": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">' # словарь, где значение до ":" это ключ, после значение.
-                          '<property id="sectionName" value="Детали" type="string" />'
-                          '<property id="sectionNumb" value="20" type="int" />',
-            "Стандартные изделия": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
-                                      '<property id="sectionName" value="Стандартные изделия" type="string" />'
-                                      '<property id="sectionNumb" value="25" type="int" />',
-            "Прочие изделия": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
-                                  '<property id="sectionName" value="Прочие изделия" type="string" />'
-                                  '<property id="sectionNumb" value="30" type="int" />',
-            "Материалы": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
-                              '<property id="sectionName" value="Материалы" type="string" />'
-                              '<property id="sectionNumb" value="35" type="int" />',
-            "Комплекты": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
-                              '<property id="sectionName" value="Комплекты" type="string" />'
-                              '<property id="sectionNumb" value="40" type="int" />',
-            }
-
-iSetComplexPropertyValue = iPropertyKeeper.SetComplexPropertyValue(iProperty, dict_xml["Детали"]) # установить значение свойства (интерфейс св-ва, значение св-ва, единици измерения (СИ))
-
-iProperty = iPropertyMng.GetProperty(iKompasDocument, "Плотность") # интерфейс свойства
-##iProperty = iPropertyMng.GetProperty(iKompasDocument, "Материал") # интерфейс свойства
-
-iPropertyValue = iPropertyKeeper.GetPropertyValue(iProperty, 0, True)[1] # получить значение свойства (интерфейс св-ва, значение св-ва, единици измерения (СИ))
-iSetPropertyValue = iPropertyKeeper.SetPropertyValue(iProperty, "2770", True) # получить значение свойства (интерфейс св-ва, значение св-ва, единици измерения (СИ))
-##iSetPropertyValue = iPropertyKeeper.SetPropertyValue(iProperty, "Сталь 40Х ГОСТ 4543-2016", True) # получить значение свойства (интерфейс св-ва, значение св-ва, единици измерения (СИ))
-
-iProperty.Update()
+ExcelAPI() # подключение API EXcel
