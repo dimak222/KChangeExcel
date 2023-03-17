@@ -7,11 +7,11 @@
 #-------------------------------------------------------------------------------
 
 title = "KChangeExcel"
-ver = "v0.1.2.0"
+ver = "v0.1.3.0"
 url = "https://github.com/dimak222/KChangeExcel" # ссылка на файл
 
 #------------------------------Настройки!---------------------------------------
-property_library = r"C:\Users\Каширских Дмитрий\Desktop\Дмитрий\ГОСТ\Прочее\Макросы\KChangeExcel\Тест\Свойства СПМ.lpt"
+property_library = r"C:\Program Files\ASCON\KOMPAS-3D v21\Sys\Свойства СПМ.lpt"
 #-------------------------------------------------------------------------------
 
 def DoubleExe():# проверка на уже запущеное приложение
@@ -71,7 +71,7 @@ def KompasAPI(): # подключение API КОМПАСа
 ##        global KompasConst # значение делаем глобальным
         global KompasAPI7 # значение делаем глобальным
         global iApplication # значение делаем глобальным
-##        global iKompasObject # значение делаем глобальным
+        global iKompasObject # значение делаем глобальным
         global iKompasDocument # значение делаем глобальным
         global iDocuments # значение делаем глобальным
 
@@ -145,6 +145,12 @@ def Message(text = "Ошибка!", counter = 4): # сообщение, пове
 
     msg_th.join() # ждать завершения процесса, иначе может закрыться следующие окно
 
+def SystemPath(): # определяем папку системных файлов
+
+    global iSystemPath # значение делаем глобальным
+
+    iSystemPath = iKompasObject.ksSystemPath(0) # определяем папку системных файлов
+
 def Connecting_to_Excel(): # подключение EXcel и изменение св-в
 
     import os # работа с файовой системой
@@ -169,7 +175,7 @@ def Connecting_to_Excel(): # подключение EXcel и изменение 
         for row in ws.iter_rows(min_col = 2, min_row = 2, max_col = ws.max_column, max_row = ws.max_row, values_only = True): # обойдём все строки и колонки Excel
 
             if row[0] != None or row[1] != None: # если есть запись старого обозначения
-                Change_property(row, ws) # изменение св-в документов (кортеж значений, лист Excel)
+                Change_property(list(row), ws) # изменение св-в документов (кортеж значений, лист Excel)
 
 ##            elif row[1] != None: # если есть запись старого наименования
 ##                Change_property(row) # изменение св-в документов
@@ -178,13 +184,13 @@ def Connecting_to_Excel(): # подключение EXcel и изменение 
         Message("Файл Excel не найден: " + name_txt_file + "\n Положите его рядом с программой!", 8) # сообщение, поверх всех окон с автоматическим закрытием
         exit() # выходим из програмы
 
-def Change_property(row, ws): # изменение св-в документов (кортеж значений, лист Excel)
+def Change_property(list_row, ws): # изменение св-в документов (список значений, лист Excel)
 
         iKompasDocument3D = KompasAPI7.IKompasDocument3D(iKompasDocument) # базовый класс документов-моделей КОМПАС
         iPart7 = iKompasDocument3D.TopPart # интерфейс компонента 3D документа
 
-        Marking_old = row[0] # старое обозначение
-        iName_old = row[1] # старое наименование
+        Marking_old = list_row.pop(0) # старое обозначение
+        iName_old = list_row.pop(0) # старое наименование
 
         Marking = iPart7.Marking # обозначение документа
         iName = iPart7.Name # наименование документа
@@ -197,32 +203,73 @@ def Change_property(row, ws): # изменение св-в документов 
 
             if iPart7.Detail: # если дет.
 
-                for n in range(4, len(row) + 1): # обработка всех столбцов
-                    print(n)
-                    cell = ws.cell(row = 1, column = n)
-                    cell = cell.value
-                    print(cell)
+                for n in range(0, len(list_row) - 1): # обработка всех столбцов
 
-                    iProperty = iPropertyMng.GetProperty(iKompasDocument, cell) # интерфейс свойства
-                    iPropertyValue = iPropertyKeeper.GetPropertyValue(iProperty, 0, True)[1] # получить значение свойства (интерфейс св-ва, значение св-ва, единици измерения (СИ))
-##                    print(iPropertyValue)
+                    cell_name = ws.cell(row = 1, column = n + 4) # колонки с заголовками
+                    cell_name = str(cell_name.value) # значение колонок
 
-    ##            iGetProperties = iPropertyMng.GetProperties(iKompasDocument) # получить массив св-в
-    ##
-    ##            for iProperty in iGetProperties:
-    ##
-    ##                iPropertyValue = iPropertyKeeper.GetPropertyValue(iProperty, 0, True)[1] # получить значение свойства (интерфейс св-ва, значение св-ва, единици измерения (СИ))
-    ##                print(iProperty.Id, iProperty.Name, iPropertyValue)
+                    cell = str(list_row[n]) # первое значение из списка (без двух первых значений)
 
-            ##    iProperty = iPropertyMng.GetProperty(iKompasDocument, "Раздел спецификации") # интерфейс свойства
-            ##    iProperty = iPropertyMng.GetProperty(iKompasDocument, "S") # интерфейс свойства
+                    iGetProperties = iPropertyMng.GetProperties(iKompasDocument) # получить массив св-в
 
-                if iProperty == None:
+                    for iProperty in iGetProperties: # перебор всех св-в из массива
 
-        ##            iGetProperties = iPropertyMng.GetProperty(property_library, "S") # интерфейс свойства
+                        if cell_name.strip() == iProperty.Name.strip(): # сравниваем значения с Excel и считаные с документа
+
+                            iProperty = iPropertyMng.GetProperty(iKompasDocument, cell_name) # интерфейс свойства
+                            iPropertyValue = str(iPropertyKeeper.GetPropertyValue(iProperty, 0, True)[1]) # получить значение свойства (интерфейс св-ва, значение св-ва, единици измерения (СИ))
+
+                            if cell.strip() != iPropertyValue.strip(): # сравниваем значения с Excel и считаные с документа
+
+                                iIsComplexPropertyValue = iPropertyKeeper.IsComplexPropertyValue(iProperty) # признак комплексного значения свойства - True - составное свойство, False - нет
+
+                                if cell_name == "Раздел спецификации": # если составное св-во
+
+                                    dict_xml = {"Детали": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">' # словарь, где значение до ":" это ключ, после значение.
+                                                              '<property id="sectionName" value="Детали" type="string" />'
+                                                              '<property id="sectionNumb" value="20" type="int" />',
+                                                "Стандартные изделия": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
+                                                                          '<property id="sectionName" value="Стандартные изделия" type="string" />'
+                                                                          '<property id="sectionNumb" value="25" type="int" />',
+                                                "Прочие изделия": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
+                                                                      '<property id="sectionName" value="Прочие изделия" type="string" />'
+                                                                      '<property id="sectionNumb" value="30" type="int" />',
+                                                "Материалы": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
+                                                                  '<property id="sectionName" value="Материалы" type="string" />'
+                                                                  '<property id="sectionNumb" value="35" type="int" />',
+                                                "Комплекты": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
+                                                                  '<property id="sectionName" value="Комплекты" type="string" />'
+                                                                  '<property id="sectionNumb" value="40" type="int" />',
+                                                }
+
+                                    iSetComplexPropertyValue = iPropertyKeeper.SetComplexPropertyValue(iProperty, dict_xml[cell]) # установить значение свойства (интерфейс св-ва, значение св-ва, единици измерения (СИ))
+
+                                    print("Заменили св-во!!!")
+
+                                print("Заменить св-ва", cell.strip())
+
+                            break
+
+                    else:
+                        print("Необходимо скопировать сво-ва из библиотеки!", cell_name)
+
+
+##                if iProperty == None: # если св-ва нет
+##
+##                    import os # работа с файовой системой
+##
+##                    property_library_path = os.path.join(iSystemPath, property_library)
+##
+##                    print(property_library_path)
+##
+##                    if os.path.exists(property_library_path): # если есть txt файл использовать его
+##                        print("Использовать библиотеку")
+##                    else:
+##                        print("Пропустить дет.")
+
+        ##            iGetProperties = iPropertyMng.GetProperty(property_library_path, "S") # интерфейс свойства
         ##            iProperty = iPropertyMng.AddProperty(iKompasDocument, iGetProperties) # создаём св-во
         ##            iProperty.Update() # применим сво-ва
-                    print("Необходимо создать св-во!")
 
             else: # если это СБ
                 print("Это СБ!")
@@ -230,29 +277,6 @@ def Change_property(row, ws): # изменение св-в документов 
         else: # пропускаем
             pass
 
-##    iIsComplexPropertyValue = iPropertyKeeper.IsComplexPropertyValue(iProperty) # признак комплексного значения свойства - True - составное свойство, False - нет
-##
-##    dict_xml = {"Детали": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">' # словарь, где значение до ":" это ключ, после значение.
-##                              '<property id="sectionName" value="Детали" type="string" />'
-##                              '<property id="sectionNumb" value="20" type="int" />',
-##                "Стандартные изделия": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
-##                                          '<property id="sectionName" value="Стандартные изделия" type="string" />'
-##                                          '<property id="sectionNumb" value="25" type="int" />',
-##                "Прочие изделия": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
-##                                      '<property id="sectionName" value="Прочие изделия" type="string" />'
-##                                      '<property id="sectionNumb" value="30" type="int" />',
-##                "Материалы": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
-##                                  '<property id="sectionName" value="Материалы" type="string" />'
-##                                  '<property id="sectionNumb" value="35" type="int" />',
-##                "Комплекты": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
-##                                  '<property id="sectionName" value="Комплекты" type="string" />'
-##                                  '<property id="sectionNumb" value="40" type="int" />',
-##                }
-##
-##    iSetComplexPropertyValue = iPropertyKeeper.SetComplexPropertyValue(iProperty, dict_xml["Детали"]) # установить значение свойства (интерфейс св-ва, значение св-ва, единици измерения (СИ))
-##
-##    iProperty = iPropertyMng.GetProperty(iKompasDocument, "Плотность") # интерфейс свойства
-##    ##iProperty = iPropertyMng.GetProperty(iKompasDocument, "Материал") # интерфейс свойства
 ##
 ##    iPropertyValue = iPropertyKeeper.GetPropertyValue(iProperty, 0, True)[1] # получить значение свойства (интерфейс св-ва, значение св-ва, единици измерения (СИ))
 ##    iSetPropertyValue = iPropertyKeeper.SetPropertyValue(iProperty, "2770", True) # получить значение свойства (интерфейс св-ва, значение св-ва, единици измерения (СИ))
@@ -267,6 +291,8 @@ DoubleExe() # проверка на уже запущеное приложени
 Check_update() # проверить обновление приложение
 
 KompasAPI() # подключение API компаса
+
+SystemPath() # определяем папку системных файлов
 
 if iKompasDocument: # проверяем открыт ли файл в КОМПАСе
 
