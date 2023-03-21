@@ -7,7 +7,7 @@
 #-------------------------------------------------------------------------------
 
 title = "KChangeExcel"
-ver = "v0.4.0.0"
+ver = "v0.5.0.0"
 url = "https://github.com/dimak222/KChangeExcel" # ссылка на файл
 
 #------------------------------Настройки!---------------------------------------
@@ -78,7 +78,6 @@ def KompasAPI(): # подключение API КОМПАСа
         global KompasAPI7 # значение делаем глобальным
         global iApplication # значение делаем глобальным
         global iKompasObject # значение делаем глобальным
-        global iKompasDocument # значение делаем глобальным
         global iDocuments # значение делаем глобальным
 
         KompasConst3D = gencache.EnsureModule("{2CAF168C-7961-4B90-9DA2-701419BEEFE3}", 0, 1, 0).constants # константа 3D документов
@@ -90,8 +89,6 @@ def KompasAPI(): # подключение API КОМПАСа
 
         KompasAPI7 = gencache.EnsureModule("{69AC2981-37C0-4379-84FD-5DD2F3C0A520}", 0, 1, 0) # API7 КОМПАСа
         iApplication = Dispatch("Kompas.Application.7") # интерфейс приложения КОМПАС-3D.
-
-        iKompasDocument = iApplication.ActiveDocument # получить текущий активный документ
 
         iDocuments = iApplication.Documents # интерфейс для открытия документов
 
@@ -161,6 +158,8 @@ def Сhecking_open_files(): # проверка открытых файлов
 
     from sys import exit # для выхода из приложения без ошибки
 
+    iKompasDocument = iApplication.ActiveDocument # получить текущий активный документ
+
     if iKompasDocument == None or iKompasDocument.DocumentType not in (4, 5, 7): # если не открыт док. или не 2D док., выдать сообщение (1-чертёж; 2- фрагмент; 3-СП; 4-модель; 5-СБ; 6-текст. док.; 7-тех. СБ;)
 
         Message("Откройте дет. или СБ!") # сообщение, поверх всех окон с автоматическим закрытием
@@ -202,38 +201,30 @@ def Connecting_to_Excel(): # подключение EXcel и изменение 
 
 def Main_assembly(): # обработка главной СБ или дет. (список значений)
 
+    iKompasDocument = iApplication.ActiveDocument # получить текущий активный документ
+
     iKompasDocument3D = KompasAPI7.IKompasDocument3D(iKompasDocument) # базовый класс документов-моделей КОМПАС
     iPart7 = iKompasDocument3D.TopPart # интерфейс компонента 3D документа (сам документ)
 
-##    Сhange = False # тригер изменения
+    parameters = iPart7.Marking, iPart7.Name, iPart7.FileName # список параметров файла
 
-    if iPart7.Detail: # если дет.
+    list_files.append(parameters) # добавляем в список
 
-            parameters = iPart7.Marking, iPart7.Name, iPart7.FileName # список параметров файла
+    if iPart7.Detail: # если это дет.
 
-            list_files.append(parameters) # добавляем в список
+        Сhecking_match(False) # проверка на совпадение обозначения или наименования (не открывать/закрывать файл)
 
-##        Collect_sources(iPart7) # рекурсивный сбор дет. и СБ (интерфейс компонента 3D документа)
-
-##        if Сhange_properties(row, iPart7): # изменение св-в документов (список значений, интерфейс компонента 3D документа)
-##
-##            iKompasDocument.Save() # iKompasDocument.Close(1) без iKompasDocument.Save() почему-то не работает
-##
-##            Сhange = True # тригер изменения
-##            print("Дет. сохранена!")
-##
     else: # если это СБ
 
+        Сhecking_match(False) # проверка на совпадение обозначения или наименования (не открывать/закрывать файл)
+
         Collect_sources(iPart7) # рекурсивный сбор дет. и СБ (интерфейс компонента 3D документа)
-##
-####        if not Сhange_properties(row, iPart7): # изменение св-в документов (список значений, интерфейс компонента 3D документа)
-####
-####            print("Не найдето в СБ!")
-##            Collect_sources(iPart7) # рекурсивный сбор дет. и СБ  (список значений, интерфейс компонента 3D документа)
+
+        Сhecking_match(True) # проверка на совпадение обозначения или наименования (не открывать/закрывать файл)
 
 def Collect_sources(iPart7): # рекурсивный сбор дет. и СБ
 
-##    try:
+    try:
 
         iPartsEx = iPart7.PartsEx(1) # список компонентов, включённыхв расчёт (0 - все компоненты (включая копии из операций копирования); 1 - первые экземпляры вставок компонентов (ksPart7CollectionTypeEnum))
 
@@ -254,129 +245,152 @@ def Collect_sources(iPart7): # рекурсивный сбор дет. и СБ
             if not iPart7.Detail: # если это СБ
                 Collect_Sources(iPart7) # рекурсивный сбор уникальных документов
 
-##    except:
-##        print("Ошибка рекурсивного сбора!")
-##        pass
+    except:
+        print("Пустая сборка!")
+        pass
 
-def Сhange_properties(row, iPart7): # изменение св-в документов (список значений, интерфейс компонента 3D документа)
+def Сhecking_match(iClose): # проверка на совпадение обозначения или наименования (не открывать/закрывать файл)
+
+    for row in list_Excel: # проверяем каждую строчку считаную с Excel
+
+        iMarking_old = row[0] # старое обозначение с удалением пробелов по бокам
+        iName_old = row[1] # старое наименование с удалением пробелов по бокам
+
+        for file in list_files: # проверяем каждого файла на совпадение
+
+            iMarking = file[0] # обозначение документа с удалением пробелов по бокам
+            iName = file[1] # наименование документа с удалением пробелов по бокам
+
+            if iMarking == iMarking_old or iMarking_old == None and iName == iName_old: # если обозначение или наименование пустое и наименование совпало
+
+                if iClose: # не открывать/закрывать файл
+                    iKompasDocument = iDocuments.Open(file[2], False, False) # Открытие файлов (False - в невидимом режиме, False - с возможностью редактирования)
+
+                else: # получить тукущий активный докумен
+                    iKompasDocument = iApplication.ActiveDocument # получить текущий активный докумен
+
+                if Сhange_properties(row, file, iKompasDocument): # изменение св-в документов (список значений, параметры считаных файлов)
+
+                    iKompasDocument.Save() # iKompasDocument.Close(1) без iKompasDocument.Save() почему-то не работает
+
+                    if iClose: # не открывать/закрывать файл
+                        iKompasDocument.Close(1) # 0 - закрыть документ без сохранения; 1 - закрыть документ, сохранив  изменения; 2 - выдать запрос на сохранение документа, если он изменен.
+
+                if iClose: # не открывать/закрывать файл
+                    list_files.pop[0] # удаляем запись из списка
+
+def Сhange_properties(row, file, iKompasDocument): # изменение св-в документов (список значений, параметры считаных файлов)
 
     import os # работа с файовой системой
 
-    iMarking_old = row.pop(0) # старое обозначение
-    iName_old = row.pop(0) # старое наименование
-
-    iMarking = iPart7.Marking # обозначение документа
-    iName = iPart7.Name # наименование документа
-
-##    print(iMarking)
-##    print(iName)
-##    exit()
-
     Сhange = False # тригер изменения
 
-    if iMarking == iMarking_old or iMarking_old == None and iName == iName_old: # если обозначение или наименование пустое и наименование совпало
+    print(iKompasDocument)
 
-        iPropertyMng = KompasAPI7.IPropertyMng(iApplication) # интерфейс менеджера свойств
-        iPropertyKeeper = KompasAPI7.IPropertyKeeper(iPart7) # интерфейс получения/редактирования значения свойств
+    iKompasDocument3D = KompasAPI7.IKompasDocument3D(iKompasDocument) # базовый класс документов-моделей КОМПАС
+    iPart7 = iKompasDocument3D.TopPart # интерфейс компонента 3D документа (сам документ)
 
-        for n in range(0, len(row) - 1): # обработка всех столбцов
+    iPropertyMng = KompasAPI7.IPropertyMng(iApplication) # интерфейс менеджера свойств
+    iPropertyKeeper = KompasAPI7.IPropertyKeeper(iPart7) # интерфейс получения/редактирования значения свойств
 
-            cell_name = ws.cell(row = 1, column = n + 4) # колонки с заголовками
-            cell_name = str(cell_name.value).strip() # значение колонок
+    iGetProperties = iPropertyMng.GetProperties(iKompasDocument) # получить массив св-в
 
-            cell = str(row[n]).strip() # первое значение из списка (без двух первых значений)
+    for n in range(0, len(row) - 3): # обработка всех столбцов кроме последнего
 
-            if cell == "None": # если значение ячейки не записанно
-                continue # пропустить
+        cell_name = ws.cell(row = 1, column = n + 4) # колонки с заголовками с пропуском первых 3-х
+        cell_name = str(cell_name.value).strip() # значение колонок
 
-            iGetProperties = iPropertyMng.GetProperties(iKompasDocument) # получить массив св-в
+        cell = str(row[n+2]).strip() # значение из списка
 
-            for iProperty in iGetProperties: # перебор всех св-в из массива
+        if cell == "None": # если значение ячейки не записанно
+            continue # пропустить
 
-                if cell_name == iProperty.Name.strip(): # сравниваем наименование значения с Excel и наименование значения считаные с документа
+        for iProperty in iGetProperties: # перебор всех св-в из массива
 
-                    iProperty = iPropertyMng.GetProperty(iKompasDocument, cell_name) # интерфейс свойства
-                    iPropertyValue = str(iPropertyKeeper.GetPropertyValue(iProperty, 0, True)[1]).strip() # получить значение св-ва (интерфейс св-ва, значение св-ва, единици измерения (СИ))
+            if cell_name == iProperty.Name.strip(): # сравниваем наименование значения с Excel и наименование значения считаные с документа
 
-                    if cell != iPropertyValue: # сравниваем значения с Excel и считаные с документа
+                iProperty = iPropertyMng.GetProperty(iKompasDocument, cell_name) # интерфейс свойства
+                iPropertyValue = str(iPropertyKeeper.GetPropertyValue(iProperty, 0, True)[1]).strip() # получить значение св-ва (интерфейс св-ва, значение св-ва, единици измерения (СИ))
 
-                        if cell_name == "Раздел спецификации": # если составное св-во
+                if cell != iPropertyValue: # сравниваем значения с Excel и считаные с документа
 
-                            dict_xml = {"Сборочные единицы": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
-                                                             '<property id="sectionName" value="Сборочные единицы" type="string" />'
-                                                             '<property id="sectionNumb" value="15" type="int" />',
-                                        "Детали": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">' # словарь, где значение до ":" это ключ, после значение.
-                                                  '<property id="sectionName" value="Детали" type="string" />'
-                                                  '<property id="sectionNumb" value="20" type="int" />',
-                                        "Стандартные изделия": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
-                                                               '<property id="sectionName" value="Стандартные изделия" type="string" />'
-                                                               '<property id="sectionNumb" value="25" type="int" />',
-                                        "Прочие изделия": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
-                                                          '<property id="sectionName" value="Прочие изделия" type="string" />'
-                                                          '<property id="sectionNumb" value="30" type="int" />',
-                                        "Материалы": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
-                                                     '<property id="sectionName" value="Материалы" type="string" />'
-                                                     '<property id="sectionNumb" value="35" type="int" />',
-                                        "Комплекты": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
-                                                     '<property id="sectionName" value="Комплекты" type="string" />'
-                                                     '<property id="sectionNumb" value="40" type="int" />',
-                                        }
+                    if cell_name == "Раздел спецификации": # если составное св-во
 
-                            iSetComplexPropertyValue = iPropertyKeeper.SetComplexPropertyValue(iProperty, dict_xml[cell]) # установить значение св-ва (интерфейс св-ва, значение св-ва, единици измерения (СИ))
-                            iProperty.Update() # применим сво-ва
+                        dict_xml = {"Сборочные единицы": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
+                                                         '<property id="sectionName" value="Сборочные единицы" type="string" />'
+                                                         '<property id="sectionNumb" value="15" type="int" />',
+                                    "Детали": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">' # словарь, где значение до ":" это ключ, после значение.
+                                              '<property id="sectionName" value="Детали" type="string" />'
+                                              '<property id="sectionNumb" value="20" type="int" />',
+                                    "Стандартные изделия": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
+                                                           '<property id="sectionName" value="Стандартные изделия" type="string" />'
+                                                           '<property id="sectionNumb" value="25" type="int" />',
+                                    "Прочие изделия": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
+                                                      '<property id="sectionName" value="Прочие изделия" type="string" />'
+                                                      '<property id="sectionNumb" value="30" type="int" />',
+                                    "Материалы": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
+                                                 '<property id="sectionName" value="Материалы" type="string" />'
+                                                 '<property id="sectionNumb" value="35" type="int" />',
+                                    "Комплекты": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
+                                                 '<property id="sectionName" value="Комплекты" type="string" />'
+                                                 '<property id="sectionNumb" value="40" type="int" />',
+                                    }
 
-                            Сhange = True # тригер изменения
-
-                            print(f"{cell_name}: \"{iPropertyValue}\" => \"{cell}\" изменено!")
-
-                            break # прерываем цикл
-
-                        else:
-
-                            iSetPropertyValue = iPropertyKeeper.SetPropertyValue(iProperty, cell, True) # установить значение св-ва (интерфейс св-ва, значение св-ва, единици измерения (СИ))
-                            iProperty.Update() # применим сво-ва
-
-                            Сhange = True # тригер изменения
-
-                            print(f"{cell_name}: \"{iPropertyValue}\" => \"{cell}\" изменено!")
-
-                            break # прерываем цикл
-
-                    else: # если свойства совпадают
-                        print(f"{cell_name}: \"{cell}\" уже записанно!")
-                        break # прерываем цикл
-
-                else: # если свойство не совпало
-                    continue # использовать следующее
-
-            else: # если св-во не найдено в св-х дет.
-
-                property_library_path = os.path.join(iSystemPath, property_library) # путь к библиотеке со свойствами
-
-                if os.path.exists(property_library_path): # если есть txt файл использовать его
-
-                    iGetProperties = iPropertyMng.GetProperty(property_library_path, cell_name) # интерфейс свойства
-                    iProperty = iPropertyMng.AddProperty(iKompasDocument, iGetProperties) # создаём св-во
-
-                    if iProperty != None: # если есть cв-во в библиотеке
-
-                        iPropertyValue = str(iPropertyKeeper.GetPropertyValue(iProperty, 0, True)[1]).strip() # получить значение свойства (интерфейс св-ва, значение св-ва, единици измерения (СИ))
-                        iSetPropertyValue = iPropertyKeeper.SetPropertyValue(iProperty, cell, True) # установить значение свойства (интерфейс св-ва, значение св-ва, единици измерения (СИ))
+                        iSetComplexPropertyValue = iPropertyKeeper.SetComplexPropertyValue(iProperty, dict_xml[cell]) # установить значение св-ва (интерфейс св-ва, значение св-ва, единици измерения (СИ))
                         iProperty.Update() # применим сво-ва
 
                         Сhange = True # тригер изменения
 
-                        print(f"{cell_name}: \"{iPropertyValue}\" => \"{cell}\" изменено и взято из библиотеки!")
+                        print(f"{cell_name}: \"{iPropertyValue}\" => \"{cell}\" изменено!")
 
-                    else: # если св-во отсутствует
-                        Message(f"Отсутствует св-во \"{cell_name}\" в библиотеке \"{property_library_path}\"") # сообщение, поверх всех окон с автоматическим закрытием (текст, время закрытия)
-                        exit() # выходим из программы
+                        break # прерываем цикл
 
-                else:
-                    Message(f"Не обнаружена библиотека св-в: \"{property_library_path}\"\nРазместите её по указаному пути!") # сообщение, поверх всех окон с автоматическим закрытием (текст, время закрытия)
+                    else:
+
+                        iSetPropertyValue = iPropertyKeeper.SetPropertyValue(iProperty, cell, True) # установить значение св-ва (интерфейс св-ва, значение св-ва, единици измерения (СИ))
+                        iProperty.Update() # применим сво-ва
+
+                        Сhange = True # тригер изменения
+
+                        print(f"{cell_name}: \"{iPropertyValue}\" => \"{cell}\" изменено!")
+
+                        break # прерываем цикл
+
+                else: # если свойства совпадают
+                    print(f"{cell_name}: \"{cell}\" уже записанно!")
+                    break # прерываем цикл
+
+            else: # если свойство не совпало
+                continue # использовать следующее
+
+        else: # если св-во не найдено в св-х дет.
+
+            property_library_path = os.path.join(iSystemPath, property_library) # путь к библиотеке со свойствами
+
+            if os.path.exists(property_library_path): # если есть txt файл использовать его
+
+                iGetProperties = iPropertyMng.GetProperty(property_library_path, cell_name) # интерфейс свойства
+                iProperty = iPropertyMng.AddProperty(iKompasDocument, iGetProperties) # создаём св-во
+
+                if iProperty != None: # если есть cв-во в библиотеке
+
+                    iPropertyValue = str(iPropertyKeeper.GetPropertyValue(iProperty, 0, True)[1]).strip() # получить значение свойства (интерфейс св-ва, значение св-ва, единици измерения (СИ))
+                    iSetPropertyValue = iPropertyKeeper.SetPropertyValue(iProperty, cell, True) # установить значение свойства (интерфейс св-ва, значение св-ва, единици измерения (СИ))
+                    iProperty.Update() # применим сво-ва
+
+                    Сhange = True # тригер изменения
+
+                    print(f"{cell_name}: \"{iPropertyValue}\" => \"{cell}\" изменено и взято из библиотеки!")
+
+                else: # если св-во отсутствует
+                    Message(f"Отсутствует св-во \"{cell_name}\" в библиотеке \"{property_library_path}\"") # сообщение, поверх всех окон с автоматическим закрытием (текст, время закрытия)
                     exit() # выходим из программы
 
-        return Сhange # тригер изменения
+            else:
+                Message(f"Не обнаружена библиотека св-в: \"{property_library_path}\"\nРазместите её по указаному пути!") # сообщение, поверх всех окон с автоматическим закрытием (текст, время закрытия)
+                exit() # выходим из программы
+
+    return Сhange # тригер изменения
 
 def Change_or_not(n, value): # запись изменения в последнюю колонку
 
@@ -409,8 +423,6 @@ SystemPath() # определяем папку системных файлов
 Connecting_to_Excel() # подключение EXcel и изменение св-в
 
 Main_assembly() # обработка главной СБ или дет. (список значений)
-
-print(list_files)
 
 ##n = 1 # счётчик обработаных строк
 ##
