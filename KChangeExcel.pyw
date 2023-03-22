@@ -7,7 +7,7 @@
 #-------------------------------------------------------------------------------
 
 title = "KChangeExcel"
-ver = "v0.5.0.0"
+ver = "v0.6.0.0"
 url = "https://github.com/dimak222/KChangeExcel" # ссылка на файл
 
 #------------------------------Настройки!---------------------------------------
@@ -222,20 +222,31 @@ def Main_assembly(): # обработка главной СБ или дет. (с
 
         Сhecking_match(True) # проверка на совпадение обозначения или наименования (не открывать/закрывать файл)
 
+        iKompasDocument3D.RebuildDocument() # перестроить СБ
+        iKompasDocument3D.Save() # сохранить изменения
+
 def Collect_sources(iPart7): # рекурсивный сбор дет. и СБ
 
-    try:
+    try: # попытаться найти все елементы в СБ
 
         iPartsEx = iPart7.PartsEx(1) # список компонентов, включённыхв расчёт (0 - все компоненты (включая копии из операций копирования); 1 - первые экземпляры вставок компонентов (ksPart7CollectionTypeEnum))
 
         for iPart7 in iPartsEx: # проверяем каждый элемент из вставленных в СБ
 
-            if iPart7.IsLocal: # если это локальная СБ пропускаем её
+            if iPart7.Standard: # если это стандартная дет.
+                print("Стандартная дет.!", iPart7.FileName)
+                continue
+
+            elif iPart7.IsLocal: # если это локальная СБ пропускаем её
                 print("Локальная сборка!", iPart7.FileName)
                 continue
 
             elif iPart7.IsBillet: # если СБ заготовка пропускаем её
                 print("Вставлена заготовка!", iPart7.FileName)
+                continue
+
+            elif iPart7.IsLayoutGeometry: # если это компоновочная геометрия
+                print("Компоновочная геометрия!", iPart7.FileName)
                 continue
 
             parameters = iPart7.Marking, iPart7.Name, iPart7.FileName # список параметров файла
@@ -245,7 +256,7 @@ def Collect_sources(iPart7): # рекурсивный сбор дет. и СБ
             if not iPart7.Detail: # если это СБ
                 Collect_Sources(iPart7) # рекурсивный сбор уникальных документов
 
-    except:
+    except: # если ошибка (нет дет.)
         print("Пустая сборка!")
         pass
 
@@ -276,8 +287,8 @@ def Сhecking_match(iClose): # проверка на совпадение обо
                     if iClose: # не открывать/закрывать файл
                         iKompasDocument.Close(1) # 0 - закрыть документ без сохранения; 1 - закрыть документ, сохранив  изменения; 2 - выдать запрос на сохранение документа, если он изменен.
 
-                if iClose: # не открывать/закрывать файл
-                    list_files.pop[0] # удаляем запись из списка
+                if not iClose: # не открывать/закрывать файл
+                    list_files.pop(0) # удаляем запись из списка
 
 def Сhange_properties(row, file, iKompasDocument): # изменение св-в документов (список значений, параметры считаных файлов)
 
@@ -285,15 +296,11 @@ def Сhange_properties(row, file, iKompasDocument): # изменение св-в
 
     Сhange = False # тригер изменения
 
-    print(iKompasDocument)
-
     iKompasDocument3D = KompasAPI7.IKompasDocument3D(iKompasDocument) # базовый класс документов-моделей КОМПАС
     iPart7 = iKompasDocument3D.TopPart # интерфейс компонента 3D документа (сам документ)
 
     iPropertyMng = KompasAPI7.IPropertyMng(iApplication) # интерфейс менеджера свойств
     iPropertyKeeper = KompasAPI7.IPropertyKeeper(iPart7) # интерфейс получения/редактирования значения свойств
-
-    iGetProperties = iPropertyMng.GetProperties(iKompasDocument) # получить массив св-в
 
     for n in range(0, len(row) - 3): # обработка всех столбцов кроме последнего
 
@@ -304,6 +311,8 @@ def Сhange_properties(row, file, iKompasDocument): # изменение св-в
 
         if cell == "None": # если значение ячейки не записанно
             continue # пропустить
+
+        iGetProperties = iPropertyMng.GetProperties(iKompasDocument) # получить массив св-в
 
         for iProperty in iGetProperties: # перебор всех св-в из массива
 
