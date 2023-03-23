@@ -7,7 +7,7 @@
 #-------------------------------------------------------------------------------
 
 title = "KChangeExcel"
-ver = "v0.6.0.0"
+ver = "v0.7.0.0"
 url = "https://github.com/dimak222/KChangeExcel" # ссылка на файл
 
 #------------------------------Настройки!---------------------------------------
@@ -75,6 +75,7 @@ def KompasAPI(): # подключение API КОМПАСа
 
     try: # попытаться подключиться к КОМПАСу
 
+        global KompasConst # значение делаем глобальным
         global KompasAPI7 # значение делаем глобальным
         global iApplication # значение делаем глобальным
         global iKompasObject # значение делаем глобальным
@@ -212,15 +213,15 @@ def Main_assembly(): # обработка главной СБ или дет. (с
 
     if iPart7.Detail: # если это дет.
 
-        Сhecking_match(False) # проверка на совпадение обозначения или наименования (не открывать/закрывать файл)
+        Сhecking_match(False, iKompasDocument) # проверка на совпадение обозначения или наименования (не открывать/закрывать файл)
 
     else: # если это СБ
 
-        Сhecking_match(False) # проверка на совпадение обозначения или наименования (не открывать/закрывать файл)
+        Сhecking_match(False, iKompasDocument) # проверка на совпадение обозначения или наименования (не открывать/закрывать файл)
 
         Collect_sources(iPart7) # рекурсивный сбор дет. и СБ (интерфейс компонента 3D документа)
 
-        Сhecking_match(True) # проверка на совпадение обозначения или наименования (не открывать/закрывать файл)
+        Сhecking_match(True, iKompasDocument) # проверка на совпадение обозначения или наименования (не открывать/закрывать файл)
 
         iKompasDocument3D.RebuildDocument() # перестроить СБ
         iKompasDocument3D.Save() # сохранить изменения
@@ -238,10 +239,10 @@ def Collect_sources(iPart7): # рекурсивный сбор дет. и СБ
                 continue
 
             elif iPart7.IsLocal: # если это локальная СБ пропускаем её
-                print("Локальная сборка!", iPart7.FileName)
+                print("Локальный компонент!", iPart7.FileName)
                 continue
 
-            elif iPart7.IsBillet: # если СБ заготовка пропускаем её
+            elif iPart7.IsBillet: # если это заготовка пропускаем её
                 print("Вставлена заготовка!", iPart7.FileName)
                 continue
 
@@ -251,44 +252,239 @@ def Collect_sources(iPart7): # рекурсивный сбор дет. и СБ
 
             parameters = iPart7.Marking, iPart7.Name, iPart7.FileName # список параметров файла
 
-            list_files.append(parameters) # добавляем в список
+            if parameters not in list_files: # если нет в списке пути к файлу, добавить (исключает добавление одной и той же детали (одинаковый путь к детали))
+                list_files.append(parameters) # добавляем в список
 
             if not iPart7.Detail: # если это СБ
-                Collect_Sources(iPart7) # рекурсивный сбор уникальных документов
+
+                Collect_sources(iPart7) # рекурсивный сбор уникальных документов
 
     except: # если ошибка (нет дет.)
         print("Пустая сборка!")
         pass
 
-def Сhecking_match(iClose): # проверка на совпадение обозначения или наименования (не открывать/закрывать файл)
+def Сhecking_match(iClose, iKompasDocument): # проверка на совпадение обозначения или наименования (не открывать/закрывать файл)
+
+    import os # работа с файовой системой
+
+    global file_number # для чтения в потоке
+    global current_file_name # для чтения в потоке
+    global Stop # для чтения в потоке
+
+    file_number = 0 # отчёт от 0-го файла
+    current_file_name = "" # что бы избежать ошибки окна в потоке
+
+    all_failes_number = len(list_Excel) # количество всех файлов в списке
+
+    if iClose: # не открывать/закрывать файл
+        Message_count(all_failes_number, "Идёт обработка файлов!") # выдача сообщений о количестве файлов (количество всех файлов, сообщение) + file_number (номер обрабатываемого файла) + current_file_name (текущее название файла)
+
+    else: # если не запускаем процесс обработки
+        Stop = False # триггер остановки сообщения (для работы сообщений при повторном вызове)
+
+    iApplication.HideMessage = KompasConst.ksHideMessageNo # скрыть сообщение перестроения и не перестраивать
 
     for row in list_Excel: # проверяем каждую строчку считаную с Excel
 
-        iMarking_old = row[0] # старое обозначение с удалением пробелов по бокам
-        iName_old = row[1] # старое наименование с удалением пробелов по бокам
+        file_number += 1 # отчёт количества обработаных файлов
 
-        for file in list_files: # проверяем каждого файла на совпадение
+        Change_or_not(file_number + 1, "Нет") # запись изменения в последнюю колонку
 
-            iMarking = file[0] # обозначение документа с удалением пробелов по бокам
-            iName = file[1] # наименование документа с удалением пробелов по бокам
+        if Stop == False: # если не нажата кнопка "Отмена" или крестик
 
-            if iMarking == iMarking_old or iMarking_old == None and iName == iName_old: # если обозначение или наименование пустое и наименование совпало
+            iMarking_old = str(row[0]).strip() # старое обозначение с удалением пробелов по бокам
+            iName_old = str(row[1]).strip() # старое наименование с удалением пробелов по бокам
 
-                if iClose: # не открывать/закрывать файл
-                    iKompasDocument = iDocuments.Open(file[2], False, False) # Открытие файлов (False - в невидимом режиме, False - с возможностью редактирования)
+            for file in list_files: # проверяем каждого файла на совпадение
 
-                else: # получить тукущий активный докумен
-                    iKompasDocument = iApplication.ActiveDocument # получить текущий активный докумен
+                iMarking = file[0].strip() # обозначение документа с удалением пробелов по бокам
+                iName = file[1].strip() # наименование документа с удалением пробелов по бокам
 
-                if Сhange_properties(row, file, iKompasDocument): # изменение св-в документов (список значений, параметры считаных файлов)
+                if iMarking == iMarking_old or iMarking_old == None and iName == iName_old: # если обозначение или наименование пустое и наименование совпало
 
-                    iKompasDocument.Save() # iKompasDocument.Close(1) без iKompasDocument.Save() почему-то не работает
+                    current_file_name = os.path.basename(file[2]) # имя документа с расширением для вывода названия файла в окно сообщений
 
                     if iClose: # не открывать/закрывать файл
-                        iKompasDocument.Close(1) # 0 - закрыть документ без сохранения; 1 - закрыть документ, сохранив  изменения; 2 - выдать запрос на сохранение документа, если он изменен.
+                        iKompasDocument = iDocuments.Open(file[2], False, False) # Открытие файлов (False - в невидимом режиме, False - с возможностью редактирования)
 
-                if not iClose: # не открывать/закрывать файл
-                    list_files.pop(0) # удаляем запись из списка
+                    else: # не открывать/закрывать файл
+                        list_files.pop(0) # удаляем запись из списка
+
+                    if Сhange_properties(row, file, iKompasDocument): # изменение св-в документов (список значений, параметры считаных файлов)
+
+                        iKompasDocument.Save() # iKompasDocument.Close(1) без iKompasDocument.Save() почему-то не работает
+
+                        if iClose: # не открывать/закрывать файл
+                            iKompasDocument.Close(1) # 0 - закрыть документ без сохранения; 1 - закрыть документ, сохранив  изменения; 2 - выдать запрос на сохранение документа, если он изменен.
+
+                    Change_or_not(file_number + 1, "Да") # запись изменения в последнюю колонку
+
+        else: # если нажали кнопку "Отмена" или крестик
+            print("Остановили окном!")
+            break # прерываем цикл
+
+    Stop = True # триггер остановки обработки и сообщения
+
+    iApplication.HideMessage = KompasConst.ksShowMessage # показывать сообщение перестроения
+
+def Message_count(all_failes_number, msg = "Идёт обработка файлов!"): # выдача сообщений о количестве файлов (количество всех файлов, сообщение) + file_number (номер обрабатываемого файла) + current_file_name (текущее название файла)
+
+    from threading import Thread # библиотека потоков
+
+    global Stop # глобальный параметр остановки сообщения
+
+    def Message_count_Thread(all_failes_number, msg): # сообщений о количестве файлов в потоке
+
+        import tkinter as tk # модуль окон
+        import tkinter.ttk as ttk # модуль окон
+        import time # модуль времени
+
+        global Stop # глобальный параметр остановки обработки
+
+        class ToolTip(object): # отображает подсказку к виджету
+
+            def __init__(self, widget, text):
+                self.widget = widget
+                self.text = text
+                self.acid = None
+                self.tipwindow = None
+                self.widget.bind('<Enter>', self.enter)
+                self.widget.bind('<Leave>', self.leave)
+                self.widget.bind('<ButtonRelease>', self.leave)
+                self.widget.bind('<Key>', self.leave)
+
+            def enter(self, event):
+                self.schedule()
+
+            def leave(self, event):
+                self.unschedule()
+                self.hidetip()
+
+            def schedule(self):
+                self.unschedule()
+                self.acid = self.widget.after(300, self.showtip) # через сколько милисунд отображать подсказку
+
+            def unschedule(self):
+                idac = self.acid
+                if idac:
+                    self.widget.after_cancel(idac)
+                self.acid = None
+
+            def showtip(self):
+                tw = self.tipwindow = tk.Toplevel(self.widget)
+                tw.wm_overrideredirect(1)
+                tw.wm_attributes('-topmost', 1) # поверх всех окон
+                tw.wm_geometry('+%d+%d' % (self.widget.winfo_rootx(), self.widget.winfo_rooty() + self.widget.winfo_height() + 2))
+                tk.Label(tw, text = current_file_name, justify = 'left', bg = '#f2f2f2', relief = 'solid', bd = 1, font = "Verdana 10").pack() # положение, цвет и шрифт текста
+
+            def hidetip(self):
+                tw = self.tipwindow
+                if tw:
+                    tw.destroy()
+                self.tipwindow = None
+
+        def Update_text(): # обновление отчёта цифр
+
+            def Updating_text(): # обновление текста
+
+                if Stop: # если триггер остановки обработки и сообщения включён
+                    print("Остановил поток!")
+                    window.destroy() # закрываем окно
+
+                else: # триггер выключен
+                    text.config(text = str(file_number) + "/" + str(all_failes_number)) # обновляем текст
+                    text.after(300, Updating_text) # через милисекунды запускаем функцию заново
+
+            Updating_text() # обновление текста
+
+        def Update_progress(): # обновление прогресса
+
+            def Updating_progress(): # обновление прогресса
+
+                percent_file_number = percent_all_failes_number * file_number # процент выполнения
+
+                if Stop: # если триггер остановки обработки и сообщения включён
+                    print("Остановил поток прогресса!")
+                    window.destroy() # закрываем окно
+
+                else: # триггер выключен
+                    progress['value'] = percent_file_number # процент выполнения
+                    window.update() # (update_idletasks не сбрасывет дпока не дошёл до конца)
+                    progress.after(300, Updating_progress) # через милисекунды запускаем функцию заново
+
+            Updating_progress() # обновление прогресса
+
+        def Button_exit(): # кнопка "Отмена"
+            window.destroy() # закрываем окно
+
+        window = tk.Tk() # создание окна
+        window.iconbitmap(default = Resource_path("cat.ico")) # значёк программы
+        window.title(title) # заголовок окна
+        window.attributes("-topmost",True) # окно поверх всех окон
+        x = (window.winfo_screenwidth() - window.winfo_reqwidth()) / 2 # положение по центру монитора
+        y = (window.winfo_screenheight() - window.winfo_reqheight()) / 2 # положение по центру монитора
+        window.wm_geometry("+%d+%d" % (x-50, y)) # положение по центру монитора -50 из-за логотипа
+##        window.geometry('200x100') # размер окна
+        window.resizable(width = False, height = False) # блокировка изменение размера окна
+
+##        logo = tk.PhotoImage(file = Resource_path("cat.png")) # логотип
+##        logo = logo.subsample(1, 1) # мастаб картинки
+##        tk.Label(window, image=logo).pack(side="right") # расположение картинки в окне
+
+        f_top = tk.Frame(window) # блок окна (вверх)
+        f_top.pack(expand = True, fill = "both") # размещение блока (с возможностью расширяться и заполненем окна во всех направлениях)
+
+        text = tk.Label(f_top, justify=tk.LEFT, font = "Verdana 10", text = msg) # текст в окне
+        text.pack(padx = 5, pady = 2) # размещение блока
+
+        text = tk.Label(f_top, fg="green", justify=tk.LEFT, padx = 3, pady = 3, font = "Verdana 10") # текст
+        ToolTip(text, current_file_name) # имя текущего файла в виде всплывающего окна
+        Update_text() # обновление отчёта цифр
+        text.pack() # размещение блока
+
+        progress = ttk.Progressbar(f_top, orient = "horizontal", length = 250, mode = 'determinate') # панель прогресса (положение, длина, вид отображения)
+        percent_all_failes_number = 100/all_failes_number # перевод в процент от общего числа
+        Update_progress() # обновление прогресса
+        progress.pack(padx = 4) # размещение блока
+
+        button = tk.Button(f_top, font = "Verdana 11", command = Button_exit, text = "Отмена") # действие кнопки
+        button.pack(side = "bottom", pady = 3) # размещение блока
+
+        window.mainloop() # отображение окна
+
+        Stop = True # триггер остановки обработки и сообщения
+
+    def Resource_path(relative_path): # для сохранения картинки внутри exe файла
+
+        import os # работа с файовой системой
+
+        try: # попытаться определить путь к папке
+            base_path = sys._MEIPASS # путь к временной папки PyInstaller
+
+        except Exception: # если ошибка
+            base_path = os.path.abspath(".") # абсолютный путь
+
+        return os.path.join(base_path, relative_path) # объеденяем и возващаем полный путь
+
+    Stop = False # триггер остановки сообщения (для работы сообщений при повторном вызове)
+
+    msg_th = Thread(target = Message_count_Thread, args = (all_failes_number, msg, )) # запуск сообщений о количестве файлов в отдельном потоке
+    msg_th.start() # запуск потока
+
+    return msg_th # возращаем запущеный поток для определения его завершения
+
+def Change_or_not(n, value): # запись изменения в последнюю колонку
+
+    cell = ws.cell(row = n, column = ws.max_column) # указание колонки
+    cell.value = value # запись значения в колонку
+
+    try: # попытаться сохранить записанные значения
+
+        workbook.save(name_txt_file) # сохраняем Excel перед считыванием
+
+    except: # если файл Excel не найден
+
+        print(f"В ячейке \"Изменено\" - \"{n-1}\":{value}")
 
 def Сhange_properties(row, file, iKompasDocument): # изменение св-в документов (список значений, параметры считаных файлов)
 
@@ -366,7 +562,7 @@ def Сhange_properties(row, file, iKompasDocument): # изменение св-в
                         break # прерываем цикл
 
                 else: # если свойства совпадают
-                    print(f"{cell_name}: \"{cell}\" уже записанно!")
+##                    print(f"{cell_name}: \"{cell}\" уже записанно!")
                     break # прерываем цикл
 
             else: # если свойство не совпало
@@ -400,19 +596,6 @@ def Сhange_properties(row, file, iKompasDocument): # изменение св-в
                 exit() # выходим из программы
 
     return Сhange # тригер изменения
-
-def Change_or_not(n, value): # запись изменения в последнюю колонку
-
-    cell = ws.cell(row = n, column = ws.max_column) # указание колонки
-    cell.value = value # запись значения в колонку
-
-    try: # попытаться сохранить записанные значения
-
-        workbook.save(name_txt_file) # сохраняем Excel перед считыванием
-
-    except: # если файл Excel не найден
-
-        print(f"В ячейке \"Изменено\" - \"{n-1}\":{value}")
 
 #-------------------------------------------------------------------------------
 
