@@ -7,7 +7,7 @@
 #-------------------------------------------------------------------------------
 
 title = "KChangeExcel"
-ver = "v0.7.1.0"
+ver = "v0.7.2.0"
 url = "https://github.com/dimak222/KChangeExcel" # ссылка на файл
 
 #------------------------------Настройки!---------------------------------------
@@ -492,6 +492,9 @@ def Сhange_properties(row, file, iKompasDocument): # изменение св-в
 
     import os # работа с файовой системой
 
+    from pythoncom import VT_EMPTY # для записи пустого св-ва
+    from win32com.client import VARIANT # для записи пустого св-ва
+
     Сhange = False # тригер изменения
 
     iKompasDocument3D = KompasAPI7.IKompasDocument3D(iKompasDocument) # базовый класс документов-моделей КОМПАС
@@ -508,11 +511,24 @@ def Сhange_properties(row, file, iKompasDocument): # изменение св-в
         cell = str(row[n+2]).strip() # значение из списка
 
         if cell == "None": # если значение ячейки не записанно
-            continue # пропустить
+            continue # использовать следующее значение
 
-        elif cell == "delete": # если значение ячейки
-            print("Присвоил пустое значение!")
-            cell = "" # пропишем пустое значение
+        elif cell == "delete": # если значение ячейки надо удалить
+
+            if cell_name == "Плотность": # если значение плотности удалять
+                cell = None # вписать "0"
+
+            elif cell_name == "Наименование": # если значение Наименования удалять
+
+                iPart7.Name = "" # пропусываем пустоту
+                iPart7.Update() # применяем св-ва
+
+                Сhange = True # тригер изменения
+
+                continue # использовать следующее значение
+
+            else: # все остальнвые
+                cell = VARIANT(VT_EMPTY, None) # пропишем пустое значение
 
         iGetProperties = iPropertyMng.GetProperties(iKompasDocument) # получить массив св-в
 
@@ -525,7 +541,7 @@ def Сhange_properties(row, file, iKompasDocument): # изменение св-в
 
                 if cell != iPropertyValue: # сравниваем значения с Excel и считаные с документа
 
-                    if cell_name == "Раздел спецификации": # если составное св-во
+                    if cell_name == "Раздел спецификации" and not VARIANT(VT_EMPTY, None): # если изменение раздела спецификаци и не удалять значение
 
                         dict_xml = {"Сборочные единицы": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
                                                          '<property id="sectionName" value="Сборочные единицы" type="string" />'
@@ -572,7 +588,7 @@ def Сhange_properties(row, file, iKompasDocument): # изменение св-в
                     break # прерываем цикл
 
             else: # если свойство не совпало
-                continue # использовать следующее
+                continue # использовать следующее значение
 
         else: # если св-во не найдено в св-х дет.
 
