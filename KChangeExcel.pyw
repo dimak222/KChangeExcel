@@ -7,7 +7,7 @@
 #-------------------------------------------------------------------------------
 
 title = "KChangeExcel"
-ver = "v0.7.2.0"
+ver = "v0.7.3.0"
 url = "https://github.com/dimak222/KChangeExcel" # ссылка на файл
 
 #------------------------------Настройки!---------------------------------------
@@ -200,7 +200,7 @@ def Connecting_to_Excel(): # подключение EXcel и изменение 
         Message("Файл Excel не найден: " + name_txt_file + "\n Положите его рядом с программой!", 8) # сообщение, поверх всех окон с автоматическим закрытием
         exit() # выходим из программы
 
-def Main_assembly(): # обработка главной СБ или дет. (список значений)
+def Main_assembly(): # обработка главной СБ или дет.
 
     iKompasDocument = iApplication.ActiveDocument # получить текущий активный документ
 
@@ -227,8 +227,6 @@ def Main_assembly(): # обработка главной СБ или дет. (с
         iKompasDocument3D.Save() # сохранить изменения
 
 def Collect_sources(iPart7): # рекурсивный сбор дет. и СБ
-
-##    try: # попытаться найти все елементы в СБ
 
     iPartsEx = iPart7.PartsEx(1) # список компонентов, включённыхв расчёт (0 - все компоненты (включая копии из операций копирования); 1 - первые экземпляры вставок компонентов (ksPart7CollectionTypeEnum))
 
@@ -276,7 +274,7 @@ def Сhecking_match(iClose, iKompasDocument): # проверка на совпа
     file_number = 0 # отчёт от 0-го файла
     current_file_name = "" # что бы избежать ошибки окна в потоке
 
-    all_failes_number = len(list_Excel) # количество всех файлов в списке
+    all_failes_number = len(list_Excel) # количество всех строк в списке
 
     if iClose: # не открывать/закрывать файл
         Message_count(all_failes_number, "Идёт обработка файлов!") # выдача сообщений о количестве файлов (количество всех файлов, сообщение) + file_number (номер обрабатываемого файла) + current_file_name (текущее название файла)
@@ -312,7 +310,7 @@ def Сhecking_match(iClose, iKompasDocument): # проверка на совпа
                     else: # не открывать/закрывать файл
                         list_files.pop(0) # удаляем запись из списка
 
-                    if Сhange_properties(row, file, iKompasDocument): # изменение св-в документов (список значений, параметры считаных файлов)
+                    if Сhange_properties(row, file, iKompasDocument): # изменение св-в документов (список значений, параметры считаных файлов, интерфейс документа)
 
                         iKompasDocument.Save() # iKompasDocument.Close(1) без iKompasDocument.Save() почему-то не работает
 
@@ -488,7 +486,7 @@ def Change_or_not(n, value): # запись изменения в последн
 
         print(f"В ячейке \"Изменено\" - \"{n-1}\":{value}")
 
-def Сhange_properties(row, file, iKompasDocument): # изменение св-в документов (список значений, параметры считаных файлов)
+def Сhange_properties(row, file, iKompasDocument): # изменение св-в документов (список значений, параметры считаных файлов, интерфейс документа)
 
     import os # работа с файовой системой
 
@@ -543,28 +541,7 @@ def Сhange_properties(row, file, iKompasDocument): # изменение св-в
 
                     if cell_name == "Раздел спецификации" and not VARIANT(VT_EMPTY, None): # если изменение раздела спецификаци и не удалять значение
 
-                        dict_xml = {"Сборочные единицы": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
-                                                         '<property id="sectionName" value="Сборочные единицы" type="string" />'
-                                                         '<property id="sectionNumb" value="15" type="int" />',
-                                    "Детали": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">' # словарь, где значение до ":" это ключ, после значение.
-                                              '<property id="sectionName" value="Детали" type="string" />'
-                                              '<property id="sectionNumb" value="20" type="int" />',
-                                    "Стандартные изделия": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
-                                                           '<property id="sectionName" value="Стандартные изделия" type="string" />'
-                                                           '<property id="sectionNumb" value="25" type="int" />',
-                                    "Прочие изделия": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
-                                                      '<property id="sectionName" value="Прочие изделия" type="string" />'
-                                                      '<property id="sectionNumb" value="30" type="int" />',
-                                    "Материалы": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
-                                                 '<property id="sectionName" value="Материалы" type="string" />'
-                                                 '<property id="sectionNumb" value="35" type="int" />',
-                                    "Комплекты": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
-                                                 '<property id="sectionName" value="Комплекты" type="string" />'
-                                                 '<property id="sectionNumb" value="40" type="int" />',
-                                    }
-
-                        iSetComplexPropertyValue = iPropertyKeeper.SetComplexPropertyValue(iProperty, dict_xml[cell]) # установить значение св-ва (интерфейс св-ва, значение св-ва, единици измерения (СИ))
-                        iProperty.Update() # применим сво-ва
+                        Сhange_property_SP(iPropertyKeeper, iProperty, cell) # изменение св-в раздела спецификации (интерфейс получения/редактирования значения свойств, интерфейс свойства, значение ячейки)
 
                         Сhange = True # тригер изменения
 
@@ -619,9 +596,34 @@ def Сhange_properties(row, file, iKompasDocument): # изменение св-в
 
     return Сhange # тригер изменения
 
+def Сhange_property_SP(iPropertyKeeper, iProperty, cell): # изменение св-в раздела спецификации (интерфейс получения/редактирования значения свойств, интерфейс свойства, значение ячейки)
+
+    dict_xml = {"Сборочные единицы": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
+                                     '<property id="sectionName" value="Сборочные единицы" type="string" />'
+                                     '<property id="sectionNumb" value="15" type="int" />',
+                "Детали": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">' # словарь, где значение до ":" это ключ, после значение.
+                          '<property id="sectionName" value="Детали" type="string" />'
+                          '<property id="sectionNumb" value="20" type="int" />',
+                "Стандартные изделия": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
+                                       '<property id="sectionName" value="Стандартные изделия" type="string" />'
+                                       '<property id="sectionNumb" value="25" type="int" />',
+                "Прочие изделия": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
+                                  '<property id="sectionName" value="Прочие изделия" type="string" />'
+                                  '<property id="sectionNumb" value="30" type="int" />',
+                "Материалы": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
+                             '<property id="sectionName" value="Материалы" type="string" />'
+                             '<property id="sectionNumb" value="35" type="int" />',
+                "Комплекты": '<property id="SPCSection" expression="" fromSource="false" format="{$sectionName}">'
+                             '<property id="sectionName" value="Комплекты" type="string" />'
+                             '<property id="sectionNumb" value="40" type="int" />',
+                }
+
+    iSetComplexPropertyValue = iPropertyKeeper.SetComplexPropertyValue(iProperty, dict_xml[cell]) # установить значение св-ва (интерфейс св-ва, значение св-ва, единици измерения (СИ))
+    iProperty.Update() # применим сво-ва
+
 #-------------------------------------------------------------------------------
 
-list_Excel = [] # список считанных строк
+list_Excel = [] # список считанных строк из Excel
 list_files = [] # список считаных файлов
 
 DoubleExe() # проверка на уже запущеное приложени
@@ -636,18 +638,4 @@ SystemPath() # определяем папку системных файлов
 
 Connecting_to_Excel() # подключение EXcel и изменение св-в
 
-Main_assembly() # обработка главной СБ или дет. (список значений)
-
-##n = 1 # счётчик обработаных строк
-##
-##for row in list_Excel: # если есть запись старого обозначения
-##
-##    n += 1 # счётчик обработаных строк
-##
-##    Change_or_not(n, "Нет") # запись изменения в последнюю колонку
-##
-##    if Main_assembly(row): # обработка главной СБ или дет. (список значений)
-##        Change_or_not(n, "Да") # запись изменения в последнюю колонку
-##
-##else: # если
-##    print("Проверка закончена!")
+Main_assembly() # обработка главной СБ или дет.
