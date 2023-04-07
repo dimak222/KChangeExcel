@@ -7,7 +7,7 @@
 #-------------------------------------------------------------------------------
 
 title = "KChangeExcel"
-ver = "v0.8.0.0"
+ver = "v0.8.1.0"
 url = "https://github.com/dimak222/KChangeExcel" # ссылка на файл
 
 #------------------------------Настройки!---------------------------------------
@@ -304,20 +304,21 @@ def Сhecking_match(iClose, iKompasDocument): # проверка на совпа
         if Stop == False: # если не нажата кнопка "Отмена" или крестик
 
             iMarking_old = str(row[0]).strip() # старое обозначение с удалением пробелов по бокам
-            iMarking_old = MarkingEmbodimentDocCode(iMarking_old)[0] # старое обозначение без кода док.
+            iMarking_old = MarkingEmbodimentDocCode(iMarking_old) # кортеж старого обозначения (Обозначение, исполнение, пробел перед кодом док., код док.)
+            iMarking_old = iMarking_old[0] + iMarking_old[1] # обозначение с исп.
 
             iName_old = str(row[1]).strip() # старое наименование с удалением пробелов по бокам
 
             for file in list_files: # проверяем каждого файла на совпадение
 
                 iMarking = file[0].strip() # обозначение документа с удалением пробелов по бокам
-                iMarking = MarkingEmbodimentDocCode(iMarking)[0] # старое обозначение без кода док.
+                iMarking = MarkingEmbodimentDocCode(iMarking) # кортеж считанного обозначения (Обозначение, исполнение, пробел перед кодом док., код док.)
+                iMarking = iMarking[0] + iMarking[1] # обозначение с исп.
 
                 iName = file[1].strip() # наименование документа с удалением пробелов по бокам
 
                 if iMarking_old == iMarking or iMarking_old == None and iName_old == iName: # если обозначение или наименование пустое и наименование совпало
 
-                    print(file)
                     current_file_name = os.path.basename(file[3]) # имя документа с расширением для вывода названия файла в окно сообщений
 
                     if iClose: # не открывать/закрывать файл
@@ -494,7 +495,7 @@ def Change_or_not(n, value): # запись изменения в последн
 
         print(f"В ячейке \"Изменено\" - \"{n-1}\":{value}")
 
-def MarkingEmbodimentDocCode(iMarking): # выделение обозначения, исполнения и кода документа (возвращает кортеж)
+def MarkingEmbodimentDocCode(iMarking): # выделение обозначения, исполнения и кода документа, возвращает кортеж (Обозначение, исполнение, пробел перед кодом док., код док.)
 
     if iMarking != VARIANT(VT_EMPTY, None): # если не надо удалять Обозначение
 
@@ -610,7 +611,7 @@ def Сhange_properties(row, embodimentIndex, iKompasDocument): # изменен�
 
                         break # прерываем цикл
 
-                    else:
+                    else: # другие св-ва
 
                         iSetPropertyValue = iPropertyKeeper.SetPropertyValue(iProperty, cell, True) # установить значение св-ва (интерфейс св-ва, значение св-ва, единици измерения (СИ))
                         iProperty.Update() # применим сво-ва
@@ -666,6 +667,64 @@ def СheckEmbodiment(iPart7, embodimentIndex): # проверка и измен�
     if iCurrentEmbodimentIndex != embodimentIndex: # если текущее исп. отличаеться от заданного
         iSetCurrentEmbodiment = iEmbodimentsManager.SetCurrentEmbodiment(embodimentIndex) # устанавливаем исп.
 
+def СhangeEmbodiment(obozn, name, var, docCode, whitespacedocCode): # сортировка исполнения (для последовательной записи), присвоение обозначения, наименования, исполнения и кода документа
+
+    iKompasDocument3D = KompasAPI7.IKompasDocument3D(iKompasDocument)
+    iEmbodimentsManager = KompasAPI7.IEmbodimentsManager(iKompasDocument3D)
+
+    isp = 0
+    ispCount = iEmbodimentsManager.EmbodimentCount                              # узнать количество исполнений
+    if ispCount >1:
+        Currentisp = iEmbodimentsManager.GetCurrentEmbodimentMarking(2,False)   # узнаю номер текущего исполнения (-1 - всё обозначение; 1 - базовая часть обозначения; 2 - исполнение с прочерком; 3 - "1" и "2" вместе; 8 - код документа с прочерком)
+        if Currentisp != "":
+            if var == "" or abs(int(Currentisp)) >= int(var):
+                while isp < ispCount:
+                    record(obozn, name, var, docCode, isp, whitespacedocCode)
+                    if var == "":
+                        var = "00"
+                    var = int(var) + 1
+                    if var < 10:
+                        var = "0" + str(var)
+                    var = str(var)
+                    isp = isp + 1
+            else:
+                isp = isp - 1 + ispCount
+                var = int(var) - 1 + ispCount
+                if var < 10:
+                    var = "0" + str(var)
+                var = str(var)
+                while isp + 1 > 0:
+                    record(obozn, name, var, docCode, isp, whitespacedocCode)
+                    var = int(var) - 1
+                    if var < 10:
+                        var = "0" + str(var)
+                    var = str(var)
+                    isp = isp - 1
+        else:
+            isp = isp - 1 + ispCount
+            if var == "":
+                var = "00"
+            var = int(var) - 1 + ispCount
+            if var < 10:
+                var = "0" + str(var)
+            var = str(var)
+            while isp + 1 > 0:
+                if var == "00":
+                    var = ""
+                record(obozn, name, var, docCode, isp, whitespacedocCode)
+                if var == "":
+                    break
+                var = int(var) - 1
+                if var < 10:
+                    var = "0" + str(var)
+                var = str(var)
+                isp = isp - 1
+
+        if iEmbodimentsManager.CurrentEmbodimentIndex !=0:                      # индекс текущего исполнения
+            iEmbodimentsManager.SetCurrentEmbodiment(0)                         # сделать текущим исполнение "0-ое"
+    else:
+        record(obozn, name, var, docCode, isp, whitespacedocCode)
+
 def RecordMarking(tuple_marking, iPart7): # запись обозначения, исполнения и кода документа
 
     iMarking = tuple_marking[0] # обозначение
@@ -675,9 +734,9 @@ def RecordMarking(tuple_marking, iPart7): # запись обозначения,
 
     full_marking = iMarking + "$|-$|" + embodiment + "$|$|$|" + whitespaceDocCode + "$|" + docCode # записываемое обозначение
 
-    iPart7.Marking = full_marking # установить обозначение
-
     print(f"Обозначение: \"{iPart7.Marking}\" => \"{iMarking}-{embodiment}{whitespaceDocCode}{docCode}\" изменено!")
+
+    iPart7.Marking = full_marking # установить обозначение
 
     iPart7.Update() # применить обозначение
 
