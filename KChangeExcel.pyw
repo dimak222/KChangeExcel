@@ -7,7 +7,7 @@
 #-------------------------------------------------------------------------------
 
 title = "KChangeExcel"
-ver = "v0.8.2.0"
+ver = "v0.8.3.0"
 url = "https://github.com/dimak222/KChangeExcel" # ссылка на файл
 
 #------------------------------Настройки!---------------------------------------
@@ -502,7 +502,7 @@ def MarkingEmbodimentDocCode(iMarking): # выделение обозначен�
 
     if iMarking != VARIANT(VT_EMPTY, None): # если не надо удалять Обозначение
 
-        docCode =["СБ", "ГЧ", "УЧ", "ЭСБ", "МЧ", "МД", "МС"] # список кодов документа
+        docCode =["СБ", "ГЧ", "УЧ", "ЭСБ", "МЧ", "МД", "МС", "Л3"] # список кодов документа
 
         for docCode in docCode: # перебор кода документа
 
@@ -587,7 +587,7 @@ def Сhange_properties(row, embodimentIndex, iKompasDocument): # изменен�
 
         for iProperty in iGetProperties: # перебор всех св-в из массива
 
-            if cell_name == iProperty.Name.strip(): # сравниваем наименование ячейки с Excel и наименование значения считаные с документа
+            if cell_name == iProperty.Name.strip(): # сравниваем наименование ячейки с Excel и наименование значения св-ва считаные с документа
 
                 iProperty = iPropertyMng.GetProperty(iKompasDocument, cell_name) # интерфейс свойства
                 iPropertyValue = str(iPropertyKeeper.GetPropertyValue(iProperty, 0, True)[1]).strip() # получить значение св-ва (интерфейс св-ва, значение св-ва, единици измерения (СИ))
@@ -598,11 +598,25 @@ def Сhange_properties(row, embodimentIndex, iKompasDocument): # изменен�
 
                         tuple_marking = MarkingEmbodimentDocCode(cell) # выделение обозначения, исполнения и кода документа возвращает кортеж (Обозначение, исполнение, пробел перед кодом док., код док.)
 
-##                        СhangeEmbodiment(tuple_marking, iPart7, iKompasDocument3D) # сортировка исполнения (для последовательной записи), присвоение обозначения, исполнения и кода документа
-
-                        RecordMarking(tuple_marking, iPart7) # запись обозначения, исполнения и кода документа
+                        СhangeEmbodiment(tuple_marking, iPart7, iKompasDocument3D) # сортировка исполнения (для последовательной записи), присвоение обозначения, исполнения и кода документа
 
                         Сhange = True # тригер изменения
+
+                        break # прерываем цикл
+
+                    elif cell_name == "Наименование": # если название ячейки "Наименование"
+
+                        iEmbodimentsManager = KompasAPI7.IEmbodimentsManager(iKompasDocument3D) # интерфейс менеджера исп.
+
+                        iEmbodiment = iEmbodimentsManager.Embodiment(0) # получить исп. по индексу или обозначению
+                        iPart7 = iEmbodiment.Part # компонент исп.
+
+                        iPart7.Name = cell # прописываем новое наименование
+                        iPart7.Update() # применяем св-ва
+
+                        Сhange = True # тригер изменения
+
+                        print(f"{cell_name}: \"{iPropertyValue}\" => \"{cell}\" изменено!")
 
                         break # прерываем цикл
 
@@ -681,104 +695,68 @@ def СhangeEmbodiment(tuple_marking, iPart7, iKompasDocument3D): # сортир�
 
     iEmbodimentsManager = KompasAPI7.IEmbodimentsManager(iKompasDocument3D) # интерфейс менеджера исп.
 
-    n = 0 # отсчёт исп.
-
     iEmbodimentCount = iEmbodimentsManager.EmbodimentCount # узнать количество исп.
 
-    if iEmbodimentCount > 1: # если исполнений больше 1-го
-
-        iCurrentEmbodiment = iEmbodimentsManager.GetCurrentEmbodimentMarking(2, False) # узнать номер текущего исполнения (-1 - всё обозначение; 1 - базовая часть обозначения; 2 - исполнение с прочерком; 3 - "1" и "2" вместе; 8 - код документа с прочерком)
-
-        embodiment = tuple_marking[1] # исп.
-
-        if iCurrentEmbodiment == "": # если текущее исполнение "нулевое"
-
-            n = iEmbodimentCount - 1 # кол-во исп. -1 (отчёт от "0")
-
-            if embodiment == "": # если исп. "нулевое"
-                embodiment = "0" # для правильного подсчёта
-
-            embodiment = int(embodiment) + iEmbodimentCount - 1 # максимальное исп.
-
-            if embodiment < 10: # если значение меньше 10
-                embodiment = "0" + str(embodiment) # добавляем "0" перед цифрой
-
-            while n + 1 > 0:
-
-                if embodiment == "00":
-                    embodiment = ""
-
-                RecordMarking(tuple_marking, iPart7) # запись обозначения, исполнения и кода документа
-
-                if embodiment == "":
-                    break
-
-                embodiment = int(embodiment) - 1
-
-                if embodiment < 10:
-                    embodiment = "0" + str(embodiment)
-
-                embodiment = str(embodiment)
-
-                n = n - 1
-
-        else: # текущее исполнение не "нулевое"
-
-            if embodiment == "" or abs(int(iCurrentEmbodiment)) >= int(embodiment): # если исп. "нулевое" или текущее исп. больше или равно новому
-
-                while n < iEmbodimentCount: # перебор всех исп.
-
-                    RecordMarking(tuple_marking, iPart7) # запись обозначения, исполнения и кода документа
-
-                    if embodiment == "": # если исп. "нулевое"
-                        embodiment = "00" #
-
-                    embodiment = int(embodiment) + 1
-
-                    if embodiment < 10:
-                        embodiment = "0" + str(embodiment)
-
-                    embodiment = str(embodiment)
-                    n += 1
-
-            else:
-                n = n - 1 + iEmbodimentCount
-                embodiment = int(embodiment) - 1 + iEmbodimentCount
-                if embodiment < 10:
-                    embodiment = "0" + str(embodiment)
-                embodiment = str(embodiment)
-
-                while n + 1 > 0:
-
-                    RecordMarking(tuple_marking, iPart7) # запись обозначения, исполнения и кода документа
-
-                    embodiment = int(embodiment) - 1
-
-                    if embodiment < 10:
-                        embodiment = "0" + str(embodiment)
-
-                    embodiment = str(embodiment)
-
-                    n -= 1
-
-        if iEmbodimentsManager.CurrentEmbodimentIndex != 0: # если индекс текущего исполнения не "0-ое"
-            iEmbodimentsManager.SetCurrentEmbodiment(0) # сделать текущим исполнение "0-ое"
-
-    else: # только одно исп.
-        RecordMarking(tuple_marking, iPart7) # запись обозначения, исполнения и кода документа
-
-def RecordMarking(tuple_marking, iPart7): # запись обозначения, исполнения и кода документа
+    n = iEmbodimentCount - 1 # индекс максимального исп. (отчёт от "0")
 
     iMarking = tuple_marking[0] # обозначение
     embodiment = tuple_marking[1] # исп.
+
+    if embodiment == "": # если исп. "нулевое"
+        embodiment = int("0") # для правильного подсчёта
+    else:
+        embodiment = int(embodiment) # преобразуем в целое число
+
+    whitespaceDocCode = tuple_marking[2] # пробел перед кодом документа
+    docCode = tuple_marking[3] # код докумета
+
+    if iEmbodimentCount > 1: # если исполнений больше 1-го
+
+        iCurrentEmbodiment = iEmbodimentsManager.GetCurrentEmbodimentMarking(2, False) # узнать номер текущего исп. (-1 - всё обозначение; 1 - базовая часть обозначения; 2 - исп. с прочерком; 3 - "1" и "2" вместе; 8 - код документа с прочерком)
+
+        if iCurrentEmbodiment == "" or abs(int(iCurrentEmbodiment)) < embodiment: # если текущее исп. "нулевое" или текущее исп. меньше нового
+
+            embodiment = embodiment + n # максимальный номер исп.
+
+            for n in range(n, -1, -1): # перебор всех исп. в обратном поредке
+
+                iEmbodiment = iEmbodimentsManager.Embodiment(n) # получить исп. по индексу или обозначению
+                iPart7 = iEmbodiment.Part # компонент исп.
+
+                RecordMarking(iMarking, embodiment, whitespaceDocCode, docCode, iPart7) # запись обозначения, исп. и кода документа
+
+                embodiment -= 1 # берем исп. на 1 меньше
+
+        else: # текущее исп. не "нулевое"
+
+            if embodiment == "" or abs(int(iCurrentEmbodiment)) >= embodiment: # если новое исп. "нулевое" или текущее исп. больше или равно новому
+
+                for n in range(0, n + 1): # перебор всех исп. в порядке возрастания
+
+                    iEmbodiment = iEmbodimentsManager.Embodiment(n) # получить исп. по индексу или обозначению
+                    iPart7 = iEmbodiment.Part # компонент исп.
+
+                    RecordMarking(iMarking, embodiment, whitespaceDocCode, docCode, iPart7) # запись обозначения, исп. и кода документа
+
+                    embodiment += 1 # берем исп. на 1 больше
+
+    else: # только одно исп.
+        RecordMarking(iMarking, embodiment, whitespaceDocCode, docCode, iPart7) # запись обозначения, исп. и кода документа
+
+def RecordMarking(iMarking, embodiment, whitespaceDocCode, docCode, iPart7): # запись обозначения, исполнения и кода документа
+
+    if embodiment < 10: # если значение исп. меньше 10
+        embodiment = "0" + str(embodiment) # добавляем "0" перед цифрой
+    else:
+        embodiment = str(embodiment) # преобразуем в строку
+
+    if embodiment == "00": # если в исп. "00"
+        embodiment = "" # записать как "нулевое" исп.
 
     if embodiment != "": # если есть исп.
         dash = "-" # пишем "-"
     else: # нет исп.
         dash = "" # пишем ""
-
-    whitespaceDocCode = tuple_marking[2] # пробел перед кодом документа
-    docCode = tuple_marking[3] # код докумета
 
     iCurrentMarking = iPart7.Marking # обозначение текущего исп.
     recording_marking = iMarking + dash + embodiment + whitespaceDocCode + docCode # записываемое обозначение
